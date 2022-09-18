@@ -1,0 +1,118 @@
+
+
+#include <avr/io.h>
+#include <util/delay.h>
+#include <avr/interrupt.h>
+unsigned char seconds=0;
+unsigned char minutes=0;
+unsigned char hours=0;
+
+
+ISR(INT0_vect)
+{
+seconds=0;
+minutes=0;
+hours=0;
+}
+
+ISR(INT1_vect)
+{
+	TCCR1B &= ~(1<<CS10)&~(1<<CS11)&~(1<<CS12);
+	
+}
+
+ISR(INT2_vect)
+{
+	
+	TCCR1B = (1<<CS11) | (1<<WGM12) | (1<<CS10);
+}
+void INT0(void)
+{
+	DDRD  &= (~(1<<PD2));               // Configure INT0/PD2 as input pin
+	PORTD  |=(1<<PD2);                  //nkhaleh b 1 pull up
+	GICR  |= (1<<INT0);                 // Enable external interrupt pin INT0
+	MCUCR |=  (1<<ISC01);              // Trigger INT0 with falling edge
+}
+
+void INT1(void)
+{
+	DDRD  &= (~(1<<PD3));  // Configure INT1/PD3 as input pin
+	GICR  |= (1<<INT1);    // Enable external interrupt pin INT1
+	MCUCR |= (1<<ISC11);
+}
+
+void INT2_Init(void)
+{
+	DDRB   &= (~(1<<PB2));   // Configure INT2/PB2 as input pin
+	PORTB  |= (1<<PB2);      //internal pull up
+	GICR   |= (1<<INT2);	 // Enable external interrupt pin INT2
+	MCUCSR &= (~(1<<ISC2));  // Trigger INT2 with the falling edge
+}
+
+ISR(TIMER1_COMPA_vect)   	
+{
+	seconds++;
+	if (seconds==60)
+	{
+	seconds=0;
+	minutes++;
+	}
+	if(minutes==60)
+	{
+	seconds=0;
+	minutes=0;
+	hours++;
+	}
+	
+}
+
+
+void Timer1_Init_CTC_Mode()
+{
+	TCNT1 = 0;    // Stop Watch counting should start once the power is connected to the MCU
+	OCR1A  = 15625; // set compare value=1000
+	TIMSK |= (1<<OCIE1A); // Enable Timer1 Compare Interrupt
+	/* Configure timer1 control register
+	 * 1. Non PWM mode FOC1=1
+	 * 2. CTC Mode WGM11=1 & WGM10=0
+	 * 3. No need for OC1 in this example so COM10=0 & COM11=0
+	 * 4. clock = F_CPU CS10=1 CS11=0 CS12=0
+	 */
+	TCCR1A |= (1<<FOC1A);
+	TCCR1B |= (1<<CS10) | (1<<CS11)|(1<<WGM12);
+}
+int main(void)
+{
+	DDRA  |= 0x3F;      //make the first 6 pins output used as enable for the six 7 segment
+	PORTA = 0x3F;
+	DDRC  |=0x0F;        //make the 1st 3 pin in port c output
+	PORTC = 0x00;      //clear them at first
+	SREG  |= (1<<7);              // Enable global interrupts in MC.
+	Timer1_Init_CTC_Mode();
+	INT0();
+	INT1();
+	INT2_Init();
+	while(1)
+    {
+       PORTA=(1<<0);
+       PORTC=seconds%10;
+       _delay_ms(3);
+        PORTA=(1<<1);
+       PORTC=seconds/10;
+       _delay_ms(3);
+         PORTA=(1<<2);
+       PORTC=minutes%10;
+       _delay_ms(3);
+         PORTA=(1<<3);
+       PORTC=minutes/10;
+       _delay_ms(3);
+         PORTA=(1<<4);
+       PORTC=hours%10;
+       _delay_ms(3);
+         PORTA=(1<<5);
+       PORTC=hours/10;
+       _delay_ms(3);
+    }
+}
+
+
